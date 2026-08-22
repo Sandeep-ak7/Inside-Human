@@ -13,6 +13,7 @@ import {
   FileText,
   Globe,
   Heart,
+  Home,
   LibraryBig,
   Microscope,
   NotebookPen,
@@ -24,13 +25,20 @@ import {
   X,
 } from "lucide-react";
 import { OrganViewer } from "./OrganViewer";
+import { NotesSection } from "./NotesSection";
+import { LessonsSection } from "./LessonsSection";
+import { HomePage } from "./HomePage";
+import { LibraryPage } from "./LibraryPage";
+import { StudyRoom } from "./StudyRoom";
 import type { OrganId } from "../lib/anatomy-data";
 import type { LocaleConfig } from "../i18n/config";
 import { locales } from "../i18n/config";
 import { buildOrgans, indexOrgans, type Organ } from "../i18n/merge";
 import { format, type Dictionary, type UiDictionary } from "../i18n/types";
+import type { AnatomyBook } from "../lib/library-data";
 
 type Modal = "lesson" | "quiz" | "animation" | "system" | null;
+type NavTab = "home" | "explore" | "lessons" | "library" | "notes";
 
 /**
  * Renders an organ illustration, or its accent glyph for organs that ship as a
@@ -122,6 +130,12 @@ export function AnatomyApp({ locale, dictionary }: { locale: LocaleConfig; dicti
   const organById = useMemo(() => indexOrgans(organs), [organs]);
 
   const [organId, setOrganId] = useState<OrganId>("heart");
+  const [activeTab, setActiveTab] = useState<NavTab>("home");
+  const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
+  const [selectedBookPage, setSelectedBookPage] = useState<number | undefined>(undefined);
+  const [customLocalBook, setCustomLocalBook] = useState<AnatomyBook | null>(null);
+  const [organNoteTriggerId, setOrganNoteTriggerId] = useState<OrganId | null>(null);
+  const [lessonTriggerId, setLessonTriggerId] = useState<string | null>(null);
   const [autoRotate, setAutoRotate] = useState(true);
   const [compare, setCompare] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
@@ -141,12 +155,12 @@ export function AnatomyApp({ locale, dictionary }: { locale: LocaleConfig; dicti
   );
 
   useEffect(() => {
-    if (!contentRef.current) return;
+    if (!contentRef.current || activeTab !== "explore") return;
     gsap.fromTo(contentRef.current.querySelectorAll("[data-reveal]"),
       { opacity: 0, y: 8 },
       { opacity: 1, y: 0, duration: 0.48, stagger: 0.035, ease: "power2.out", overwrite: true },
     );
-  }, [organId]);
+  }, [organId, activeTab]);
 
   const selectOrgan = (id: OrganId) => {
     if (organById[id].illustrated) {
@@ -159,6 +173,7 @@ export function AnatomyApp({ locale, dictionary }: { locale: LocaleConfig; dicti
     setMobileLibrary(false);
     setCompare(false);
     setQuizActive(false);
+    setActiveTab("explore");
   };
 
   // Warms the model in the HTTP cache while the pointer is still travelling,
@@ -172,159 +187,410 @@ export function AnatomyApp({ locale, dictionary }: { locale: LocaleConfig; dicti
   return (
     <main className="app-shell">
       <header className="topbar">
-        <button className="brand" type="button" onClick={() => selectOrgan("heart")} aria-label={t.brand.home}>
+        <button
+          className="brand"
+          type="button"
+          onClick={() => {
+            setActiveTab("home");
+            setSelectedBookId(null);
+            setModal(null);
+          }}
+          aria-label={t.brand.home}
+        >
           <strong>Inside Human<sup>✦</sup></strong>
           <em>{t.brand.tagline}</em>
         </button>
         <nav className="main-nav" aria-label="Primary navigation">
-          <button className="active"><Compass size={17} /> {t.nav.explore}</button>
-          <button><BrainCircuit size={17} /> {t.nav.systems}</button>
-          <button onClick={() => setModal("lesson")}><BookOpen size={17} /> {t.nav.lessons}</button>
-          <button><LibraryBig size={17} /> {t.nav.library}</button>
-          <button><NotebookPen size={17} /> {t.nav.notes}</button>
+          <button
+            type="button"
+            className={`nav-item-btn nav-home-pill ${activeTab === "home" ? "active" : ""}`}
+            onClick={() => {
+              setActiveTab("home");
+              setSelectedBookId(null);
+              setModal(null);
+            }}
+          >
+            <Home size={16} /> Home
+          </button>
+          <button
+            type="button"
+            className={`nav-item-btn ${activeTab === "explore" ? "active" : ""}`}
+            onClick={() => {
+              setActiveTab("explore");
+              setSelectedBookId(null);
+              setModal(null);
+            }}
+          >
+            <Compass size={16} /> {t.nav.explore}
+          </button>
+          <button
+            type="button"
+            className={`nav-item-btn ${activeTab === "lessons" ? "active" : ""}`}
+            onClick={() => {
+              setActiveTab("lessons");
+              setLessonTriggerId(null);
+              setSelectedBookId(null);
+              setModal(null);
+            }}
+          >
+            <BookOpen size={16} /> {t.nav.lessons}
+          </button>
+          <button
+            type="button"
+            className={`nav-item-btn ${activeTab === "library" ? "active" : ""}`}
+            onClick={() => {
+              setActiveTab("library");
+              setSelectedBookId(null);
+              setModal(null);
+            }}
+          >
+            <LibraryBig size={16} /> {t.nav.library}
+          </button>
+          <button
+            type="button"
+            className={`nav-item-btn ${activeTab === "notes" ? "active" : ""}`}
+            onClick={() => {
+              setActiveTab("notes");
+              setSelectedBookId(null);
+              setModal(null);
+            }}
+          >
+            <NotebookPen size={16} /> {t.nav.notes}
+          </button>
         </nav>
-        <label className="search-box">
-          <Search size={17} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search.placeholder} />
-        </label>
-        <LanguageSwitcher locale={locale} t={t} />
-        <button className="profile" aria-label={t.profile.open}><span>MA</span><ChevronDown size={15} /></button>
-        <button className="mobile-library-trigger" onClick={() => setMobileLibrary(true)} aria-label={t.library.open}><LibraryBig size={20} /></button>
-      </header>
-
-      <div className="workspace">
-        <aside className={`organ-library ${mobileLibrary ? "open" : ""}`}>
-          <div className="panel-heading">
-            <span>{t.library.title}</span>
-            <button aria-label={t.library.close} className="mobile-close" onClick={() => setMobileLibrary(false)}><X size={17} /></button>
-            <button aria-label={t.library.saved}><Bookmark size={17} /></button>
-          </div>
-          <div className="organ-list">
-            {filteredOrgans.map((item) => (
+        <div className="search-box-wrapper">
+          <label className="search-box">
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+              }}
+              placeholder="Search organs, topics…"
+            />
+            {query && (
               <button
                 type="button"
-                key={item.id}
-                className={`organ-item ${organId === item.id ? "active" : ""}`}
-                onClick={() => selectOrgan(item.id)}
-                onPointerEnter={() => prefetchOrgan(item.id)}
-                onFocus={() => prefetchOrgan(item.id)}
-                style={{ "--item-accent": item.accent } as React.CSSProperties}
+                className="search-clear-btn"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
               >
-                <span className="organ-glyph">
-                  <OrganArt organ={item} asset="thumb" alt="" size={47} />
-                </span>
-                <span><b>{item.name}</b><small>{item.system}</small></span>
-                {organId === item.id && <Heart className="favorite" size={14} fill="currentColor" />}
+                <X size={14} />
               </button>
-            ))}
-          </div>
-          <button className="view-all" onClick={() => setQuery("")}>{t.library.viewAll} <ArrowRight size={14} /></button>
-          <blockquote>
-            <Sparkles size={18} />
-            <p>{t.library.quoteLine1}<br />{t.library.quoteLine2}</p>
-            <em>{t.library.quoteSign}</em>
-          </blockquote>
-        </aside>
+            )}
+          </label>
+          {query.trim().length > 0 && (
+            <div className="search-dropdown-menu">
+              <div className="search-dropdown-header">Matching Organ Specimens</div>
+              {filteredOrgans.length > 0 ? (
+                filteredOrgans.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="search-dropdown-item"
+                    onClick={() => {
+                      selectOrgan(item.id);
+                      setQuery("");
+                    }}
+                  >
+                    <span className="search-dropdown-icon">{item.icon}</span>
+                    <div className="search-dropdown-text">
+                      <strong>{item.name}</strong>
+                      <small>{item.system}</small>
+                    </div>
+                    <ArrowRight size={14} className="search-dropdown-arrow" />
+                  </button>
+                ))
+              ) : (
+                <div className="search-dropdown-empty">No matching anatomical specimen found</div>
+              )}
+            </div>
+          )}
+        </div>
+        <LanguageSwitcher locale={locale} t={t} />
+        <button
+          className="mobile-library-trigger"
+          onClick={() => (activeTab !== "explore" ? setActiveTab("explore") : setMobileLibrary(true))}
+          aria-label={t.library.open}
+        >
+          <LibraryBig size={20} />
+        </button>
+      </header>
 
-        <OrganViewer
-          organ={organ}
+      {activeTab === "home" ? (
+        <HomePage
           t={t}
-          autoRotate={autoRotate}
-          onAutoRotate={setAutoRotate}
-          compare={compare}
-          onCompare={() => setCompare(!compare)}
-          quizActive={quizActive}
-          onQuizExit={() => setQuizActive(false)}
+          organs={organs}
+          onSelectOrgan={(id) => {
+            selectOrgan(id);
+          }}
+          onNavigateTab={(tab) => {
+            if (tab === "systems") {
+              setModal("system");
+            } else if (tab === "library") {
+              setMobileLibrary(true);
+              setActiveTab("explore");
+            } else {
+              setActiveTab(tab);
+            }
+          }}
+          onOpenSystemModal={() => setModal("system")}
+          onOpenLesson={(lessonId) => {
+            setLessonTriggerId(lessonId);
+            setActiveTab("lessons");
+          }}
+          onOpenNotesForOrgan={(id) => {
+            setOrganNoteTriggerId(id);
+            setActiveTab("notes");
+          }}
         />
+      ) : activeTab === "lessons" ? (
+        <LessonsSection
+          t={t}
+          organs={organs}
+          onExploreOrgan={(id) => {
+            selectOrgan(id);
+            setActiveTab("explore");
+          }}
+          onTakeNotesForOrgan={(id) => {
+            setOrganNoteTriggerId(id);
+            setActiveTab("notes");
+          }}
+          initialLessonId={lessonTriggerId}
+        />
+      ) : activeTab === "notes" ? (
+        <NotesSection
+          t={t}
+          organs={organs}
+          onExploreOrgan={(id) => {
+            selectOrgan(id);
+            setActiveTab("explore");
+          }}
+          initialNewNoteOrganId={organNoteTriggerId}
+          onCloseNewNoteModal={() => setOrganNoteTriggerId(null)}
+        />
+      ) : activeTab === "library" ? (
+        selectedBookId ? (
+          <StudyRoom
+            bookId={selectedBookId}
+            customBook={customLocalBook || undefined}
+            initialPage={selectedBookPage}
+            t={t}
+            onBackToLibrary={() => {
+              if (customLocalBook?.pdfUrl && customLocalBook.pdfUrl.startsWith("blob:")) {
+                try {
+                  URL.revokeObjectURL(customLocalBook.pdfUrl);
+                } catch {}
+              }
+              setCustomLocalBook(null);
+              setSelectedBookId(null);
+              setSelectedBookPage(undefined);
+            }}
+            onNavigateTab={(tab) => {
+              if (customLocalBook?.pdfUrl && customLocalBook.pdfUrl.startsWith("blob:")) {
+                try {
+                  URL.revokeObjectURL(customLocalBook.pdfUrl);
+                } catch {}
+              }
+              setCustomLocalBook(null);
+              setSelectedBookId(null);
+              setActiveTab(tab);
+            }}
+          />
+        ) : (
+          <LibraryPage
+            t={t}
+            onOpenBook={(bookId, pageNumber) => {
+              setCustomLocalBook(null);
+              setSelectedBookId(bookId);
+              setSelectedBookPage(pageNumber);
+            }}
+            onOpenCustomBook={(customBook) => {
+              setCustomLocalBook(customBook);
+              setSelectedBookId(customBook.id);
+              setSelectedBookPage(1);
+            }}
+            onNavigateTab={setActiveTab}
+          />
+        )
+      ) : (
+        <>
+          <div className="workspace">
+            <aside className={`organ-library ${mobileLibrary ? "open" : ""}`}>
+              <div className="panel-heading">
+                <span>{t.library.title}</span>
+                <button aria-label={t.library.close} className="mobile-close" onClick={() => setMobileLibrary(false)}><X size={17} /></button>
+                <button aria-label={t.library.saved}><Bookmark size={17} /></button>
+              </div>
+              <div className="organ-list">
+                {filteredOrgans.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={`organ-item ${organId === item.id ? "active" : ""}`}
+                    onClick={() => selectOrgan(item.id)}
+                    onPointerEnter={() => prefetchOrgan(item.id)}
+                    onFocus={() => prefetchOrgan(item.id)}
+                    style={{ "--item-accent": item.accent } as React.CSSProperties}
+                  >
+                    <span className="organ-glyph">
+                      <OrganArt organ={item} asset="thumb" alt="" size={47} />
+                    </span>
+                    <span><b>{item.name}</b><small>{item.system}</small></span>
+                    {organId === item.id && <Heart className="favorite" size={14} fill="currentColor" />}
+                  </button>
+                ))}
+              </div>
+              <button className="view-all" onClick={() => setQuery("")}>{t.library.viewAll} <ArrowRight size={14} /></button>
+              <blockquote>
+                <Sparkles size={18} />
+                <p>{t.library.quoteLine1}<br />{t.library.quoteLine2}</p>
+                <em>{t.library.quoteSign}</em>
+              </blockquote>
+            </aside>
 
-        <aside className="info-panel" ref={contentRef}>
-          <div className="info-kicker" data-reveal><Heart size={13} fill="currentColor" /> {format(t.info.kicker, { organ: organ.name })}</div>
-          <div className="info-title-row" data-reveal>
-            <div><h1>{organ.name}</h1><em>{organ.poetic}</em></div>
-            <span className="specimen-stamp">
-              <OrganArt organ={organ} asset="organ" alt="" size={92} />
-            </span>
-          </div>
-          <p className="description" data-reveal>{organ.description}</p>
-          <div className="rule" />
-          <h2 data-reveal>{t.info.keyFacts}</h2>
-          <dl className="key-facts">
-            <div data-reveal><dt><span>◇</span> {t.info.size}</dt><dd><Measure>{organ.size}</Measure></dd></div>
-            <div data-reveal><dt><span>♙</span> {t.info.weight}</dt><dd><Measure>{organ.weight}</Measure></dd></div>
-            <div data-reveal><dt><span>⌁</span> {t.info.daily}</dt><dd><Measure>{organ.dailyFact}</Measure></dd></div>
-            <div data-reveal><dt><span>⌖</span> {t.info.location}</dt><dd><Measure>{organ.location}</Measure></dd></div>
-            <div data-reveal><dt><span>❋</span> {t.info.bloodSupply}</dt><dd><Measure>{organ.bloodSupply}</Measure></dd></div>
-            <div data-reveal><dt><span>◈</span> {t.info.function}</dt><dd><Measure>{organ.function}</Measure></dd></div>
-          </dl>
-          <div className="medical-note" data-reveal><Stethoscope size={16} /><p><b>{t.info.medical}</b>{organ.medical}</p></div>
-          <div className="fun-note" data-reveal><Sparkles size={15} /><p><b>{t.info.didYouKnow}</b>{organ.funFact}</p></div>
-          <button className="lesson-button" data-reveal onClick={() => setModal("lesson")}>{t.info.viewLesson} <ArrowRight size={16} /></button>
-          <div className="action-grid" data-reveal>
-            <button onClick={() => setModal("animation")}><Play size={15} /> {t.info.animate}</button>
-            <button onClick={() => { setQuizActive(true); setModal(null); }}><CircleHelp size={15} /> {t.info.quiz}</button>
-            <button onClick={() => setCompare(!compare)} className={compare ? "active" : ""}><Share2 size={15} /> {t.info.compare}</button>
-          </div>
-        </aside>
-      </div>
+            <OrganViewer
+              organ={organ}
+              t={t}
+              autoRotate={autoRotate}
+              onAutoRotate={setAutoRotate}
+              compare={compare}
+              onCompare={() => setCompare(!compare)}
+              quizActive={quizActive}
+              onQuizExit={() => setQuizActive(false)}
+            />
 
-      {compare && (
-        <section className="compare-strip" aria-label={t.compare.title}>
-          <div className="compare-organ"><OrganArt organ={organ} asset="thumb" alt="" /><span>{t.compare.comparing}</span><strong>{organ.name}</strong><small>{organ.system}</small></div>
-          <b>{t.compare.vs}</b>
-          <div className="compare-organ"><OrganArt organ={reference} asset="thumb" alt="" /><span>{t.compare.reference}</span><strong>{reference.name}</strong><small>{reference.system}</small></div>
-          <dl><div><dt>{t.compare.primaryRole}</dt><dd><Measure>{organ.function}</Measure></dd></div><div><dt>{t.compare.scale}</dt><dd><Measure>{organ.size}</Measure></dd></div></dl>
-          <button onClick={() => setCompare(false)} aria-label={t.compare.close}><X size={16} /></button>
-        </section>
+            <aside className="info-panel" ref={contentRef}>
+              <div className="info-kicker" data-reveal><Heart size={13} fill="currentColor" /> {format(t.info.kicker, { organ: organ.name })}</div>
+              <div className="info-title-row" data-reveal>
+                <div><h1>{organ.name}</h1><em>{organ.poetic}</em></div>
+                <span className="specimen-stamp">
+                  <OrganArt organ={organ} asset="organ" alt="" size={92} />
+                </span>
+              </div>
+              <p className="description" data-reveal>{organ.description}</p>
+              <div className="rule" />
+              <h2 data-reveal>{t.info.keyFacts}</h2>
+              <dl className="key-facts">
+                <div data-reveal><dt><span>◇</span> {t.info.size}</dt><dd><Measure>{organ.size}</Measure></dd></div>
+                <div data-reveal><dt><span>♙</span> {t.info.weight}</dt><dd><Measure>{organ.weight}</Measure></dd></div>
+                <div data-reveal><dt><span>⌁</span> {t.info.daily}</dt><dd><Measure>{organ.dailyFact}</Measure></dd></div>
+                <div data-reveal><dt><span>⌖</span> {t.info.location}</dt><dd><Measure>{organ.location}</Measure></dd></div>
+                <div data-reveal><dt><span>❋</span> {t.info.bloodSupply}</dt><dd><Measure>{organ.bloodSupply}</Measure></dd></div>
+                <div data-reveal><dt><span>◈</span> {t.info.function}</dt><dd><Measure>{organ.function}</Measure></dd></div>
+              </dl>
+              <div className="medical-note" data-reveal><Stethoscope size={16} /><p><b>{t.info.medical}</b>{organ.medical}</p></div>
+              <div className="fun-note" data-reveal><Sparkles size={15} /><p><b>{t.info.didYouKnow}</b>{organ.funFact}</p></div>
+              <button
+                className="lesson-button"
+                data-reveal
+                onClick={() => {
+                  setLessonTriggerId(`lesson-${organ.id}`);
+                  setActiveTab("lessons");
+                }}
+              >
+                {t.info.viewLesson} <ArrowRight size={16} />
+              </button>
+              <div className="action-grid" data-reveal>
+                <button type="button" onClick={() => setModal("animation")}><Play size={15} /> {t.info.animate}</button>
+                <button type="button" onClick={() => { setQuizActive(true); setModal(null); }}><CircleHelp size={15} /> {t.info.quiz}</button>
+                <button
+                  type="button"
+                  className="take-notes-action"
+                  onClick={() => {
+                    setOrganNoteTriggerId(organ.id);
+                    setActiveTab("notes");
+                  }}
+                  title={`Take notes about the ${organ.name}`}
+                >
+                  <NotebookPen size={15} /> Take Notes
+                </button>
+                <button type="button" onClick={() => setCompare(!compare)} className={compare ? "active" : ""}><Share2 size={15} /> {t.info.compare}</button>
+              </div>
+            </aside>
+          </div>
+
+          {compare && (
+            <section className="compare-strip" aria-label={t.compare.title}>
+              <div className="compare-organ"><OrganArt organ={organ} asset="thumb" alt="" /><span>{t.compare.comparing}</span><strong>{organ.name}</strong><small>{organ.system}</small></div>
+              <b>{t.compare.vs}</b>
+              <div className="compare-organ"><OrganArt organ={reference} asset="thumb" alt="" /><span>{t.compare.reference}</span><strong>{reference.name}</strong><small>{reference.system}</small></div>
+              <dl><div><dt>{t.compare.primaryRole}</dt><dd><Measure>{organ.function}</Measure></dd></div><div><dt>{t.compare.scale}</dt><dd><Measure>{organ.size}</Measure></dd></div></dl>
+              <button onClick={() => setCompare(false)} aria-label={t.compare.close}><X size={16} /></button>
+            </section>
+          )}
+
+          <section className="learning-cards" aria-label={format(t.cards.resources, { organ: organ.name })}>
+            <article className="notes-card-preview">
+              <header>
+                <div><em>My Notes</em><h3>{organ.name} Notes</h3></div>
+                <NotebookPen size={17} />
+              </header>
+              <div className="notes-card-body">
+                <p>Record clinical pearls, physiological mechanisms, and exam mnemonics for the {organ.name}.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setOrganNoteTriggerId(organ.id);
+                  setActiveTab("notes");
+                }}
+              >
+                Take Notes <ArrowRight size={14} />
+              </button>
+            </article>
+            <article>
+              <header><div><em>{t.cards.microscopic}</em><h3>{organ.tissue}</h3></div><Microscope size={17} /></header>
+              <div className="microscope-visual organ-card-image"><OrganArt organ={organ} asset="microscopic" alt="" /></div>
+              <button
+                type="button"
+                onClick={() => {
+                  setLessonTriggerId(`lesson-${organ.id}`);
+                  setActiveTab("lessons");
+                }}
+              >
+                {t.cards.exploreTissue} <ArrowRight size={14} />
+              </button>
+            </article>
+            <article>
+              <header><div><em>{t.cards.compareOrgans}</em><h3>{organ.comparison}</h3></div><Share2 size={17} /></header>
+              <div className="comparison-visual organ-card-image"><OrganArt organ={organ} asset="compare" alt="" /></div>
+              <button onClick={() => setCompare(true)}>{t.cards.openComparison} <ArrowRight size={14} /></button>
+            </article>
+            <article>
+              <header><div><em>{t.cards.functionAnimation}</em><h3>{organ.function}</h3></div><Play size={17} /></header>
+              <button
+                type="button"
+                className="function-visual organ-card-image"
+                onClick={() => setModal("animation")}
+                aria-label={format(t.cards.playAria, { organ: organ.name })}
+              >
+                <OrganArt organ={organ} asset="organ" alt="" />
+                <i className="function-pulse" />
+                <span className="play-badge"><Play size={18} fill="currentColor" /></span>
+              </button>
+              <button onClick={() => setModal("animation")}>{t.cards.playAnimation} <ArrowRight size={14} /></button>
+            </article>
+            <article>
+              <header><div><em>{t.cards.clinicalNotes}</em><h3>{t.cards.commonConditions}</h3></div><FileText size={17} /></header>
+              <ul>{organ.conditions.map((condition) => <li key={condition}>{condition}</li>)}</ul>
+              <button onClick={() => setModal("lesson")}>{t.cards.seeAll} <ArrowRight size={14} /></button>
+            </article>
+            <article className="system-card">
+              <header><div><em>{t.cards.whereItWorks}</em><h3>{organ.system}</h3></div><BrainCircuit size={17} /></header>
+              <button
+                type="button"
+                className="system-visual organ-card-image"
+                onClick={() => setModal("system")}
+                aria-label={format(t.cards.systemAria, { organ: organ.name })}
+              >
+                <OrganArt organ={organ} asset="location" alt="" />
+              </button>
+              <button onClick={() => setModal("system")}>{t.cards.seeSystem} <ArrowRight size={14} /></button>
+            </article>
+          </section>
+        </>
       )}
-
-      <section className="learning-cards" aria-label={format(t.cards.resources, { organ: organ.name })}>
-        <article className="curiosity-card">
-          <span>✿</span><p>{t.library.quoteLine1}<br />{t.library.quoteLine2}</p><em>{t.library.quoteSign}</em>
-        </article>
-        <article>
-          <header><div><em>{t.cards.microscopic}</em><h3>{organ.tissue}</h3></div><Microscope size={17} /></header>
-          <div className="microscope-visual organ-card-image"><OrganArt organ={organ} asset="microscopic" alt="" /></div>
-          <button onClick={() => setModal("lesson")}>{t.cards.exploreTissue} <ArrowRight size={14} /></button>
-        </article>
-        <article>
-          <header><div><em>{t.cards.compareOrgans}</em><h3>{organ.comparison}</h3></div><Share2 size={17} /></header>
-          <div className="comparison-visual organ-card-image"><OrganArt organ={organ} asset="compare" alt="" /></div>
-          <button onClick={() => setCompare(true)}>{t.cards.openComparison} <ArrowRight size={14} /></button>
-        </article>
-        <article>
-          <header><div><em>{t.cards.functionAnimation}</em><h3>{organ.function}</h3></div><Play size={17} /></header>
-          {/* The artwork itself is the control, so the play badge inside it is
-              decorative rather than a nested button. */}
-          <button
-            type="button"
-            className="function-visual organ-card-image"
-            onClick={() => setModal("animation")}
-            aria-label={format(t.cards.playAria, { organ: organ.name })}
-          >
-            <OrganArt organ={organ} asset="organ" alt="" />
-            <i className="function-pulse" />
-            <span className="play-badge"><Play size={18} fill="currentColor" /></span>
-          </button>
-          <button onClick={() => setModal("animation")}>{t.cards.playAnimation} <ArrowRight size={14} /></button>
-        </article>
-        <article>
-          <header><div><em>{t.cards.clinicalNotes}</em><h3>{t.cards.commonConditions}</h3></div><FileText size={17} /></header>
-          <ul>{organ.conditions.map((condition) => <li key={condition}>{condition}</li>)}</ul>
-          <button onClick={() => setModal("lesson")}>{t.cards.seeAll} <ArrowRight size={14} /></button>
-        </article>
-        <article className="system-card">
-          <header><div><em>{t.cards.whereItWorks}</em><h3>{organ.system}</h3></div><BrainCircuit size={17} /></header>
-          <button
-            type="button"
-            className="system-visual organ-card-image"
-            onClick={() => setModal("system")}
-            aria-label={format(t.cards.systemAria, { organ: organ.name })}
-          >
-            <OrganArt organ={organ} asset="location" alt="" />
-          </button>
-          <button onClick={() => setModal("system")}>{t.cards.seeSystem} <ArrowRight size={14} /></button>
-        </article>
-      </section>
 
       {modal && <LearningModal type={modal} organ={organ} t={t} onClose={() => setModal(null)} />}
       {mobileLibrary && <button className="drawer-backdrop" aria-label={t.library.close} onClick={() => setMobileLibrary(false)} />}

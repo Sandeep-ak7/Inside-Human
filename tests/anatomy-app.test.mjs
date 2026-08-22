@@ -103,3 +103,40 @@ test("buildOrgans and indexOrgans correctly assemble and index specimens", async
   assert.equal(indexed["brain"].name, "Brain");
   assert.equal(indexed["lungs"].name, "Lungs");
 });
+
+test("Library page navigation delivers unique and distinct content for every page change", async () => {
+  const { ANATOMY_LIBRARY_BOOKS, getBookPageContent } = await import("../app/lib/library-data.ts");
+  
+  assert.ok(ANATOMY_LIBRARY_BOOKS.length >= 9, "Library should contain at least 9 textbooks including added Anatomy & Physiology");
+  const addedBook = ANATOMY_LIBRARY_BOOKS.find((b) => b.id === "anatomy-and-physiology-openstax");
+  assert.ok(addedBook, "User-added Anatomy and Physiology book should exist in library");
+  assert.equal(addedBook.totalPages, 1350, "Added book should have 1350 total pages");
+  assert.equal(addedBook.chapters.length, 17, "Added book should have 17 chapters");
+
+  for (const book of ANATOMY_LIBRARY_BOOKS) {
+    assert.ok(book.id, "Book must have an id");
+    assert.ok(book.title, "Book must have a title");
+    assert.ok(book.author, "Book must have an author");
+    assert.ok(book.totalPages > 0, "Book must have totalPages");
+    assert.ok(book.chapters.length > 0, "Book must have chapters");
+
+    // Test consecutive pages to ensure content changes dynamically
+    const page10 = getBookPageContent(book, 10);
+    const page11 = getBookPageContent(book, 11);
+    const page12 = getBookPageContent(book, 12);
+
+    assert.equal(page10.pageNumber, 10);
+    assert.equal(page11.pageNumber, 11);
+    assert.equal(page12.pageNumber, 12);
+
+    // Ensure headlines and subheadings are distinct
+    assert.notEqual(page10.sectionHeadline, page11.sectionHeadline, "Page 10 and 11 headlines must be distinct");
+    assert.notEqual(page11.sectionHeadline, page12.sectionHeadline, "Page 11 and 12 headlines must be distinct");
+    assert.notEqual(page10.subheading, page11.subheading, "Page 10 and 11 subheadings must be distinct");
+
+    // Ensure valid body paragraphs and terms
+    assert.ok(page10.bodyParagraphs.length > 0, "Page 10 should have body paragraphs");
+    assert.ok(page10.anatomicalTerms.length > 0, "Page 10 should have Latin terms");
+    assert.ok(page10.clinicalPearl.length > 0, "Page 10 should have a clinical pearl");
+  }
+});
